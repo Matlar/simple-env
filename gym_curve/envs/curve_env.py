@@ -6,7 +6,7 @@ import itertools
 import numpy as np
 from enum import IntEnum
 
-SHAPE = (10, 10)
+SHAPE = (36, 36)
 ALLIES = 1
 ENEMIES = 1
 WIN = 1000
@@ -18,13 +18,15 @@ class Action(IntEnum):
     right = 3
 
 class CurveEnv(gym.Env):
+    metadata = {'render.modes': ['human']}
 
     def __init__(self):
+        super(CurveEnv, self).__init__()
         self._curr_episode = 0
         self.reset()
         self.action_space = gym.spaces.Discrete(4)
         self.observation_space = gym.spaces.Box(low=0, high=4,
-                shape=(SHAPE[0]*SHAPE[1],), dtype=np.uint8)
+                shape=(SHAPE[0], SHAPE[1], 1), dtype=np.uint8)
 
     def step(self, action):
         self._curr_step += 1
@@ -63,9 +65,9 @@ class CurveEnv(gym.Env):
         os.system('clear')
         print("Episode:", self._curr_episode)
         print("Step:", self._curr_step)
-        state = self._get_state().reshape(SHAPE)
-        for r in range(state.shape[0]):
-            for c in range(state.shape[1]):
+        state = self._get_state()[:, :, 0].reshape(SHAPE)
+        for r in range(SHAPE[0]):
+            for c in range(SHAPE[1]):
                 to_print = (' ', '#', 'S', 'A', 'E')
                 print(to_print[state[r, c]], end=' ')
             print()
@@ -160,4 +162,4 @@ class CurveEnv(gym.Env):
         for ally in self._state['allies']: state[ally] = 3
         for enemy in self._state['enemies']: state[enemy] = 4
         if self._state['self'] is not None: state[self._state['self']] = 2
-        return state.flatten()
+        return state.reshape((SHAPE[0], SHAPE[1], 1))
