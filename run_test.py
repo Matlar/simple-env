@@ -1,8 +1,8 @@
 import gym
-import gym_simple
+import gym_curve
 from spinup.utils.test_policy import load_policy, run_policy
 
-env = gym.make('Simple-v0')
+env = gym.make('Curve-v0')
 env.reset()
 while True:
     env.render()
