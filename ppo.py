@@ -5,7 +5,7 @@ import gym
 
 env_fn = lambda : gym.make('Simple-v0')
 
-ac_kwargs = dict(hidden_sizes=[64,64], activation=tf.nn.relu)
+ac_kwargs = dict(hidden_sizes=[9], activation=tf.nn.relu)
 
 logger_kwargs = dict(output_dir='out', exp_name='simple_ppo')
 
