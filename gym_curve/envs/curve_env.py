@@ -7,6 +7,7 @@ import numpy as np
 from enum import IntEnum
 
 SHAPE = (36, 36)
+CHARACTERS = (' ', '#', 'S', 'A', 'E')
 ALLIES = 1
 ENEMIES = 1
 WIN = 1000
@@ -25,8 +26,8 @@ class CurveEnv(gym.Env):
         self._curr_episode = 0
         self.reset()
         self.action_space = gym.spaces.Discrete(4)
-        self.observation_space = gym.spaces.Box(low=0, high=4,
-                shape=(SHAPE[0], SHAPE[1], 1), dtype=np.uint8)
+        self.observation_space = gym.spaces.Box(low=0, high=1,
+                shape=(SHAPE[0], SHAPE[1], 4), dtype=np.uint8)
 
     def step(self, action):
         self._curr_step += 1
@@ -65,11 +66,14 @@ class CurveEnv(gym.Env):
         os.system('clear')
         print("Episode:", self._curr_episode)
         print("Step:", self._curr_step)
-        state = self._get_state()[:, :, 0].reshape(SHAPE)
+
+        layers = self._get_state()
+        state = [factor*layers[...,layer]
+                for layer, factor in zip(range(4), [1, -1, 3, 4])]
+        state = np.sum(state, axis=0, dtype=np.uint8)
         for r in range(SHAPE[0]):
             for c in range(SHAPE[1]):
-                to_print = (' ', '#', 'S', 'A', 'E')
-                print(to_print[state[r, c]], end=' ')
+                print(CHARACTERS[state[r, c]], end=' ')
             print()
         time.sleep(0.5)
 
@@ -158,8 +162,10 @@ class CurveEnv(gym.Env):
         return score
 
     def _get_state(self):
-        state = np.copy(self._state['walls'])
-        for ally in self._state['allies']: state[ally] = 3
-        for enemy in self._state['enemies']: state[enemy] = 4
-        if self._state['self'] is not None: state[self._state['self']] = 2
-        return state.reshape((SHAPE[0], SHAPE[1], 1))
+        # layers = (walls, self, allies, enemies)
+        layers = (self._state['walls'],
+                  *(np.zeros(SHAPE) for _ in range(3)))
+        if self._state['self'] is not None: layers[1][self._state['self']] = 1
+        for ally in self._state['allies']: layers[2][ally] = 1
+        for enemy in self._state['enemies']: layers[3][enemy] = 1
+        return np.stack(layers, axis=2)
