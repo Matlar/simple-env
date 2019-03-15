@@ -8,6 +8,7 @@ from enum import IntEnum
 
 SHAPE = (36, 36)
 CHARACTERS = (' ', '#', 'S', 'A', 'E')
+SLEEP = 0.05
 ALLIES = 1
 ENEMIES = 1
 WIN = 1000
@@ -41,19 +42,20 @@ class CurveEnv(gym.Env):
 
         reward = self._get_reward()
         ob = self._get_state()
+        episode_over = self._state['self'] is None
 
         # Check if episode over
-        episode_over = True
-        if not self._state['enemies'] and not self._state['allies']:
-            reward = 0
-        elif not self._state['enemies']:
-            reward = WIN * len(self._state['allies'])
-        elif not self._state['allies']:
-            reward = -WIN * len(self._state['enemies'])
-        elif self._state['self'] is None:
-            reward = -WIN * min(len(self._state['enemies']) - len(self._state['allies']), 0)
-        else:
-            episode_over = False
+        # episode_over = True
+        # if not self._state['enemies'] and not self._state['allies']:
+        #     reward = 0
+        # elif not self._state['enemies']:
+        #     reward = WIN * len(self._state['allies'])
+        # elif not self._state['allies']:
+        #     reward = -WIN * len(self._state['enemies'])
+        # elif self._state['self'] is None:
+        #     reward = -WIN * min(len(self._state['enemies']) - len(self._state['allies']), 0)
+        # else:
+        #     episode_over = False
         return ob, reward, episode_over, {}
 
     def reset(self):
@@ -75,7 +77,7 @@ class CurveEnv(gym.Env):
             for c in range(SHAPE[1]):
                 print(CHARACTERS[state[r, c]], end=' ')
             print()
-        time.sleep(0.5)
+        time.sleep(SLEEP)
 
     def _set_state(self):
         state = dict()
@@ -159,7 +161,8 @@ class CurveEnv(gym.Env):
             else:
                 alive_allies.append(ally)
         self._state['allies'] = alive_allies
-        return score
+        # return score
+        return 1
 
     def _get_state(self):
         # layers = (walls, self, allies, enemies)

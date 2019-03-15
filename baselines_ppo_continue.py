@@ -3,7 +3,6 @@ import time
 import gym
 import gym_curve
 import itertools
-from stable_baselines.common.policies import CnnPolicy
 from stable_baselines.common.vec_env import SubprocVecEnv
 from stable_baselines.bench import Monitor
 from stable_baselines import PPO2
