@@ -5,12 +5,12 @@ import random
 import itertools
 import numpy as np
 from enum import IntEnum
+from stable_baselines import PPO2
 
 SHAPE = (36, 36)
-CHARACTERS = (' ', '#', 'S', 'A', 'E')
+CHARACTERS = (' ', '#', 'S', 'A')
 SLEEP = 0.05
-ALLIES = 1
-ENEMIES = 5
+AGENTS = 2
 WIN = 1000
 
 class Action(IntEnum):
@@ -28,39 +28,43 @@ class CurveEnv(gym.Env):
         self.reset()
         self.action_space = gym.spaces.Discrete(4)
         self.observation_space = gym.spaces.Box(low=0, high=1,
-                shape=(SHAPE[0], SHAPE[1], 4), dtype=np.uint8)
+                shape=(SHAPE[0], SHAPE[1], 3), dtype=np.uint8)
         self._move_count = [0, 0, 0, 0]
 
     def step(self, action):
         self._curr_step += 1
-        # TODO: Perhaps: move every agent simultaneously
-        if self._state['self'] is not None: self._move_self(action)
+        states = [self._get_state(agent=i) for i in range(1, AGENTS)]
 
-        for i, _ in enumerate(self._state['enemies']):
-            self._move_enemy(i)
-        for i, ally in enumerate(self._state['allies']):
-            if ally != self._state['self']:
-                self._move_ally(i)
+        # Move self and count the action
+        self._move(action)
+        self._move_count[action] += 1
 
+        # Move other agents
+        for i, _ in enumerate(self._state['agents'][1:], start=1):
+            # TODO: Cache get_state
+            self._move(self._agent_model.predict(states[i-1])[0], agent=i)
+
+        # Remove dead agents
+        for i, agent in enumerate(self._state['agents']):
+            if agent is None: continue
+            if self._state['walls'][agent] == 1:
+                self._state['agents'][i] = None
+            for j, other in enumerate(self._state['agents']):
+                if i != j and agent == other:
+                    # Two heads collided
+                    self._state['agents'][i] = self._state['agents'][j] = None
+                    self._state['walls'][agent] = 1
+
+        # Prepare stuff to return
         reward = self._get_reward()
         ob = self._get_state()
-        episode_over = self._state['self'] is None
+        episode_over = self._state['agents'][0] is None
 
-        # Check if episode over
-        # episode_over = True
-        # if not self._state['enemies'] and not self._state['allies']:
-        #     reward = 0
-        # elif not self._state['enemies']:
-        #     reward = WIN * len(self._state['allies'])
-        # elif not self._state['allies']:
-        #     reward = -WIN * len(self._state['enemies'])
-        # elif self._state['self'] is None:
-        #     reward = -WIN * min(len(self._state['enemies']) - len(self._state['allies']), 0)
-        # else:
-        #     episode_over = False
         return ob, reward, episode_over, {}
 
     def reset(self):
+        if self._curr_episode % 1000 == 0:
+            self._agent_model = PPO2.load('ppo_curve')
         self._curr_episode += 1
         self._curr_step = 0
         self._state = self._set_state()
@@ -77,7 +81,7 @@ class CurveEnv(gym.Env):
 
         layers = self._get_state()
         state = [factor*layers[...,layer]
-                for layer, factor in zip(range(4), [1, -1, 3, 4])]
+                for layer, factor in zip(range(3), [1, -1, 3])]
         state = np.sum(state, axis=0, dtype=np.uint8)
         for r in range(SHAPE[0]):
             for c in range(SHAPE[1]):
@@ -98,86 +102,48 @@ class CurveEnv(gym.Env):
             walls[SHAPE[0]-1, i] = 1
         state['walls'] = walls
 
-        # Generate allies and enemies
+        # Generate agents
         agents = set()
-        while len(agents) < ALLIES + ENEMIES:
+        while len(agents) < AGENTS:
             agents.add((random.randint(1, SHAPE[0]-2),
                        random.randint(1, SHAPE[1]-2)))
         agents = list(agents)
         random.shuffle(agents)
-        state['allies'] = agents[:ALLIES]
-        state['enemies'] = agents[ALLIES:]
+        state['agents'] = agents
 
-        # Set self to a random ally
-        state['self'] = state['allies'][0]
         return state
 
-    def _move_self(self, action):
-        # Count the performed actions
-        self._move_count[action] += 1
+    def _move(self, action, agent=0):
+        if self._state['agents'][agent] is None: return
 
-        y, x = self._state['self']
+        # Move agent
+        y, x = self._state['agents'][agent]
         if action == Action.up:
-            self._state['self'] = self._state['allies'][0] = (y-1, x)
+            self._state['agents'][agent] = (y-1, x)
         elif action == Action.down:
-            self._state['self'] = self._state['allies'][0] = (y+1, x)
+            self._state['agents'][agent] = (y+1, x)
         elif action == Action.left:
-            self._state['self'] = self._state['allies'][0] = (y, x-1)
+            self._state['agents'][agent] = (y, x-1)
         elif action == Action.right:
-            self._state['self'] = self._state['allies'][0] = (y, x+1)
+            self._state['agents'][agent] = (y, x+1)
+
+        # Create a wall
         self._state['walls'][y, x] = 1
-
-    def _move(self, agent_type, index):
-        walls = np.copy(self._state['walls'])
-        for agent in itertools.chain(self._state['allies'], self._state['enemies']):
-            walls[agent] = 1
-        y, x = self._state[agent_type][index]
-        available = []
-        for y_to, x_to in ((y-1, x), (y+1, x), (y, x-1), (y, x+1)):
-            if walls[y_to, x_to] != 1:
-                available.append((y_to, x_to))
-        # Do a random (maybe available) move and place a new wall
-        move = random.choice(available) if available else (y-1, x-1)
-        self._state[agent_type][index] = move
-        self._state['walls'][y, x] = 1
-
-    def _move_enemy(self, enemy):
-        self._move('enemies', enemy)
-
-    def _move_ally(self, ally):
-        self._move('allies', ally)
 
     def _get_reward(self):
-        score = 0
+        return len(self._state['agents']) - self._state['agents'].count(None)
 
-        # Check for dead enemies
-        alive_enemies = []
-        for enemy in self._state['enemies']:
-            if self._state['walls'][enemy] == 1:
-                score += 1
-            else:
-                alive_enemies.append(enemy)
-        self._state['enemies'] = alive_enemies
+    def _get_state(self, agent=0):
+        # layers = (walls, self, agents)
+        layers = (self._state['walls'], np.zeros(SHAPE), np.zeros(SHAPE))
 
-        # Check for dead allies
-        alive_allies = []
-        for ally in self._state['allies']:
-            if self._state['walls'][ally] == 1:
-                score -= 1
-                if ally == self._state['self']:
-                    # We died
-                    self._state['self'] = None
-            else:
-                alive_allies.append(ally)
-        self._state['allies'] = alive_allies
-        # return score
-        return 1
+        # Set self layer
+        if self._state['agents'][agent] is not None:
+            layers[1][self._state['agents'][agent]] = 1
 
-    def _get_state(self):
-        # layers = (walls, self, allies, enemies)
-        layers = (self._state['walls'],
-                  *(np.zeros(SHAPE) for _ in range(3)))
-        if self._state['self'] is not None: layers[1][self._state['self']] = 1
-        for ally in self._state['allies']: layers[2][ally] = 1
-        for enemy in self._state['enemies']: layers[3][enemy] = 1
+        # Set agent layer
+        for agent in self._state['agents']:
+            if agent is not None:
+                layers[2][agent] = 1
+
         return np.stack(layers, axis=2)
