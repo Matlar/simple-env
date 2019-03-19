@@ -10,7 +10,7 @@ SHAPE = (36, 36)
 CHARACTERS = (' ', '#', 'S', 'A', 'E')
 SLEEP = 0.05
 ALLIES = 1
-ENEMIES = 1
+ENEMIES = 5
 WIN = 1000
 
 class Action(IntEnum):
@@ -29,9 +29,11 @@ class CurveEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(4)
         self.observation_space = gym.spaces.Box(low=0, high=1,
                 shape=(SHAPE[0], SHAPE[1], 4), dtype=np.uint8)
+        self._move_count = [0, 0, 0, 0]
 
     def step(self, action):
         self._curr_step += 1
+        # TODO: Perhaps: move every agent simultaneously
         if self._state['self'] is not None: self._move_self(action)
 
         for i, _ in enumerate(self._state['enemies']):
@@ -68,6 +70,10 @@ class CurveEnv(gym.Env):
         os.system('clear')
         print("Episode:", self._curr_episode)
         print("Step:", self._curr_step)
+        print(f'Up: {self._move_count[Action.up]}',
+              f'\tDown: {self._move_count[Action.down]}',
+              f'\tLeft: {self._move_count[Action.left]}',
+              f'\tRight: {self._move_count[Action.right]}')
 
         layers = self._get_state()
         state = [factor*layers[...,layer]
@@ -107,6 +113,9 @@ class CurveEnv(gym.Env):
         return state
 
     def _move_self(self, action):
+        # Count the performed actions
+        self._move_count[action] += 1
+
         y, x = self._state['self']
         if action == Action.up:
             self._state['self'] = self._state['allies'][0] = (y-1, x)
