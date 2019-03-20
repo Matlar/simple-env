@@ -8,8 +8,8 @@ from enum import IntEnum
 from stable_baselines import PPO2
 
 SHAPE = (36, 36)
-CHARACTERS = (' ', '#', 'S', 'A')
-SLEEP = 0.05
+CHARACTERS = (' ', '#', 'S', 'A', '@')
+SLEEP = 0.1
 AGENTS = 6
 WIN = 1000
 
@@ -70,7 +70,7 @@ class CurveEnv(gym.Env):
         self._layers = self._get_states()
 
         # Calculate reward for this step
-        reward = self._get_reward() if self._state['agents'][0] is not None else -1
+        reward = self._get_reward()
 
         return np.stack(self._layers[0], axis=2), reward, episode_over, {}
 
@@ -104,7 +104,7 @@ class CurveEnv(gym.Env):
               f'\tNo-op: {self._move_count[Action.noop]}')
 
         layers = [np.copy(layer) for layer in self._layers[0]]
-        state = [factor*layer for factor, layer in zip([1, -1, 0, 3], layers)]
+        state = [factor*layer for factor, layer in zip([1, -1, 3, 3], layers)]
         state = np.sum(state, axis=0, dtype=np.uint8)
         for r in range(SHAPE[0]):
             for c in range(SHAPE[1]):
