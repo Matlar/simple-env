@@ -31,8 +31,8 @@ class CurveEnv(gym.Env):
     def __init__(self, training=True):
         super(CurveEnv, self).__init__()
         self.action_space = gym.spaces.Discrete(3)
-        self.observation_space = gym.spaces.Box(low=0, high=2,
-                shape=(SHAPE[0], SHAPE[1], 3), dtype=np.uint8)
+        self.observation_space = gym.spaces.Box(low=0, high=1,
+                shape=(SHAPE[0], SHAPE[1], 4), dtype=np.uint8)
 
         self._curr_episode = 0
         self._move_count = [0, 0, 0]
@@ -70,7 +70,7 @@ class CurveEnv(gym.Env):
         self._layers = self._get_states()
 
         # Calculate reward for this step
-        reward = self._get_reward()
+        reward = self._get_reward() if self._state['agents'][0] is not None else -1
 
         return np.stack(self._layers[0], axis=2), reward, episode_over, {}
 
@@ -88,6 +88,7 @@ class CurveEnv(gym.Env):
         # Reset layers
         self._layers = [(self._state['walls'],
                          np.zeros(SHAPE),
+                         np.zeros(SHAPE),
                          np.zeros(SHAPE)) for _ in range(AGENTS)]
         self._layers = self._get_states()
 
@@ -103,9 +104,7 @@ class CurveEnv(gym.Env):
               f'\tNo-op: {self._move_count[Action.noop]}')
 
         layers = [np.copy(layer) for layer in self._layers[0]]
-        layers[1][layers[1] == 2] = 0
-        layers[2][layers[2] == 2] = 0
-        state = [factor*layer for factor, layer in zip([1, -1, 3], layers)]
+        state = [factor*layer for factor, layer in zip([1, -1, 0, 3], layers)]
         state = np.sum(state, axis=0, dtype=np.uint8)
         for r in range(SHAPE[0]):
             for c in range(SHAPE[1]):
@@ -167,26 +166,27 @@ class CurveEnv(gym.Env):
 
 
     def _get_reward(self):
-        return len(self._state['agents']) - self._state['agents'].count(None)
+        return (len(self._state['agents'])
+                - self._state['agents'].count(None))
 
 
     def _get_states(self):
-        # layers = (wall_layer, self_layer, agents_layer)
-        wall_layer, _, agents_layer = self._layers[0]
+        # layers = (wall_layer, self_layer, past_self_layer, agents_layer)
+        wall_layer, _, _, agents_layer = self._layers[0]
 
         # Update agent layer
-        agents_layer[agents_layer == 2] = 0
-        agents_layer[agents_layer == 1] = 2
+        agents_layer[agents_layer == 1] = 0
         for agent in self._state['agents']:
             if agent is not None:
                 agents_layer[agent[0]] = 1
 
         # Update self layers
-        for i, (_, self_layer, _) in enumerate(self._layers):
-            self_layer[self_layer == 2] = 0
-            self_layer[self_layer == 1] = 2
+        for i, (_, self_layer, past_self_layer, _) in enumerate(self._layers):
+            past_self_layer[past_self_layer == 1] = 0
+            past_self_layer[self_layer == 1] = 1
+            self_layer[self_layer == 1] = 0
             if self._state['agents'][i] is not None:
                 self_layer[self._state['agents'][i][0]] = 1
 
-        return [(wall_layer, self_layer, agents_layer)
-                for _, self_layer, _ in self._layers]
+        return [(wall_layer, self_layer, past_self_layer, agents_layer)
+                for _, self_layer, past_self_layer, _ in self._layers]

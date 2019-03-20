@@ -21,5 +21,6 @@ while True:
         obs = env.reset()
         resets += 1
     if resets > 5:
+        print('--- Reloading agent model ---')
         model = PPO2.load('ppo_curve')
         resets = 0
