@@ -10,84 +10,109 @@ from stable_baselines import PPO2
 SHAPE = (36, 36)
 CHARACTERS = (' ', '#', 'S', 'A')
 SLEEP = 0.05
-AGENTS = 2
+AGENTS = 6
 WIN = 1000
 
 class Action(IntEnum):
+    left  = -1
+    noop  = 0
+    right = 1
+
+class Direction(IntEnum):
     up    = 0
-    down  = 1
-    left  = 2
-    right = 3
+    right = 1
+    down  = 2
+    left  = 3
 
 class CurveEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self):
+
+    def __init__(self, training=True):
         super(CurveEnv, self).__init__()
-        self._curr_episode = 0
-        self.reset()
-        self.action_space = gym.spaces.Discrete(4)
-        self.observation_space = gym.spaces.Box(low=0, high=1,
+        self.action_space = gym.spaces.Discrete(3)
+        self.observation_space = gym.spaces.Box(low=0, high=2,
                 shape=(SHAPE[0], SHAPE[1], 3), dtype=np.uint8)
-        self._move_count = [0, 0, 0, 0]
+
+        self._curr_episode = 0
+        self._move_count = [0, 0, 0]
+        self._training = training
+
 
     def step(self, action):
         self._curr_step += 1
-        states = [self._get_state(agent=i) for i in range(1, AGENTS)]
 
         # Move self and count the action
+        action -= 1
         self._move(action)
         self._move_count[action] += 1
 
         # Move other agents
-        for i, _ in enumerate(self._state['agents'][1:], start=1):
-            # TODO: Cache get_state
-            self._move(self._agent_model.predict(states[i-1])[0], agent=i)
+        for i, agent in enumerate(self._state['agents'][1:], start=1):
+            if agent is not None:
+                agent_action, _ = self._agent_model.predict(np.stack(self._layers[i], axis=2))
+                self._move(agent_action-1, agent=i)
 
         # Remove dead agents
         for i, agent in enumerate(self._state['agents']):
             if agent is None: continue
-            if self._state['walls'][agent] == 1:
+            if self._state['walls'][agent[0]] == 1:
                 self._state['agents'][i] = None
             for j, other in enumerate(self._state['agents']):
-                if i != j and agent == other:
+                if i != j and other is not None and agent[0] == other[0]:
                     # Two heads collided
                     self._state['agents'][i] = self._state['agents'][j] = None
-                    self._state['walls'][agent] = 1
+                    self._state['walls'][agent[0]] = 1
+        episode_over = (self._state['agents'][0] is None if self._training
+                        else all([agent is None for agent in self._state['agents']]))
 
-        # Prepare stuff to return
+        # Update layers
+        self._layers = self._get_states()
+
+        # Calculate reward for this step
         reward = self._get_reward()
-        ob = self._get_state()
-        episode_over = self._state['agents'][0] is None
 
-        return ob, reward, episode_over, {}
+        return np.stack(self._layers[0], axis=2), reward, episode_over, {}
+
 
     def reset(self):
+        # Reload agent models
         if self._curr_episode % 1000 == 0:
             self._agent_model = PPO2.load('ppo_curve')
+
+        # Set up new episode
         self._curr_episode += 1
         self._curr_step = 0
         self._state = self._set_state()
-        return self._get_state()
+
+        # Reset layers
+        self._layers = [(self._state['walls'],
+                         np.zeros(SHAPE),
+                         np.zeros(SHAPE)) for _ in range(AGENTS)]
+        self._layers = self._get_states()
+
+        return np.stack(self._layers[0], axis=2)
+
 
     def render(self, mode='human', close=False):
         os.system('clear')
         print("Episode:", self._curr_episode)
         print("Step:", self._curr_step)
-        print(f'Up: {self._move_count[Action.up]}',
-              f'\tDown: {self._move_count[Action.down]}',
+        print(f'Right: {self._move_count[Action.right]}',
               f'\tLeft: {self._move_count[Action.left]}',
-              f'\tRight: {self._move_count[Action.right]}')
+              f'\tNo-op: {self._move_count[Action.noop]}')
 
-        layers = self._get_state()
-        state = [factor*layers[...,layer]
-                for layer, factor in zip(range(3), [1, -1, 3])]
+        layers = [np.copy(layer) for layer in self._layers[0]]
+        layers[1][layers[1] == 2] = 0
+        layers[2][layers[2] == 2] = 0
+        state = [factor*layer for factor, layer in zip([1, -1, 3], layers)]
         state = np.sum(state, axis=0, dtype=np.uint8)
         for r in range(SHAPE[0]):
             for c in range(SHAPE[1]):
                 print(CHARACTERS[state[r, c]], end=' ')
             print()
         time.sleep(SLEEP)
+
 
     def _set_state(self):
         state = dict()
@@ -105,45 +130,63 @@ class CurveEnv(gym.Env):
         # Generate agents
         agents = set()
         while len(agents) < AGENTS:
-            agents.add((random.randint(1, SHAPE[0]-2),
-                       random.randint(1, SHAPE[1]-2)))
+            position = (random.randint(2, SHAPE[0]-3),
+                        random.randint(2, SHAPE[1]-3))
+            direction = random.randint(0, 3)
+            agents.add((position, direction))
         agents = list(agents)
         random.shuffle(agents)
         state['agents'] = agents
 
         return state
 
+
     def _move(self, action, agent=0):
         if self._state['agents'][agent] is None: return
 
-        # Move agent
-        y, x = self._state['agents'][agent]
-        if action == Action.up:
-            self._state['agents'][agent] = (y-1, x)
-        elif action == Action.down:
-            self._state['agents'][agent] = (y+1, x)
-        elif action == Action.left:
-            self._state['agents'][agent] = (y, x-1)
-        elif action == Action.right:
-            self._state['agents'][agent] = (y, x+1)
+        # Unpack
+        (y, x), direction = self._state['agents'][agent]
 
-        # Create a wall
+        # Change direction
+        direction = (direction + action) % 4
+
+        if direction == Direction.up:
+            new_position = (y-1, x)
+        elif direction == Direction.down:
+            new_position = (y+1, x)
+        elif direction == Direction.left:
+            new_position = (y, x-1)
+        elif direction == Direction.right:
+            new_position = (y, x+1)
+
+        # Create a wall at old position
         self._state['walls'][y, x] = 1
+
+        # Place agent in new position
+        self._state['agents'][agent] = (new_position, direction)
+
 
     def _get_reward(self):
         return len(self._state['agents']) - self._state['agents'].count(None)
 
-    def _get_state(self, agent=0):
-        # layers = (walls, self, agents)
-        layers = (self._state['walls'], np.zeros(SHAPE), np.zeros(SHAPE))
 
-        # Set self layer
-        if self._state['agents'][agent] is not None:
-            layers[1][self._state['agents'][agent]] = 1
+    def _get_states(self):
+        # layers = (wall_layer, self_layer, agents_layer)
+        wall_layer, _, agents_layer = self._layers[0]
 
-        # Set agent layer
+        # Update agent layer
+        agents_layer[agents_layer == 2] = 0
+        agents_layer[agents_layer == 1] = 2
         for agent in self._state['agents']:
             if agent is not None:
-                layers[2][agent] = 1
+                agents_layer[agent[0]] = 1
 
-        return np.stack(layers, axis=2)
+        # Update self layers
+        for i, (_, self_layer, _) in enumerate(self._layers):
+            self_layer[self_layer == 2] = 0
+            self_layer[self_layer == 1] = 2
+            if self._state['agents'][i] is not None:
+                self_layer[self._state['agents'][i][0]] = 1
+
+        return [(wall_layer, self_layer, agents_layer)
+                for _, self_layer, _ in self._layers]
