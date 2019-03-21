@@ -49,6 +49,7 @@ if __name__ == '__main__':
         env = SubprocVecEnv([make_env for _ in range(4)])
         if sys.argv[1] == 'new':
             model = PPO2(CnnPolicy, env, verbose=1)
+            model.save('ppo_curve')
         else:
             model = PPO2.load('ppo_curve', env=env)
 
