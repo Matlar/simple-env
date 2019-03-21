@@ -37,6 +37,7 @@ class CurveEnv(gym.Env):
         self._curr_episode = 0
         self._move_count = [0, 0, 0]
         self._training = training
+        self.load_model()
 
 
     def step(self, action):
@@ -76,10 +77,6 @@ class CurveEnv(gym.Env):
 
 
     def reset(self):
-        # Reload agent models
-        if self._curr_episode % 1000 == 0:
-            self._agent_model = PPO2.load('ppo_curve')
-
         # Set up new episode
         self._curr_episode += 1
         self._curr_step = 0
@@ -92,6 +89,9 @@ class CurveEnv(gym.Env):
                          np.zeros(SHAPE)) for _ in range(AGENTS)]
         self._layers = self._get_states()
 
+        # Load new model
+        if self._training and self._curr_episode % 1000 == 0:
+            self.load_model()
         return np.stack(self._layers[0], axis=2)
 
 
@@ -117,6 +117,11 @@ class CurveEnv(gym.Env):
         #         print('#' if self._layers[0][2][r, c] else ' ', end=' ')
         #     print()
         time.sleep(SLEEP)
+
+
+    def load_model(self):
+        print("--- LOADING MODEL ---")
+        self._agent_model = PPO2.load('ppo_curve')
 
 
     def _set_state(self):
