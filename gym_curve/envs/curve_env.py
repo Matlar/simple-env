@@ -120,7 +120,6 @@ class CurveEnv(gym.Env):
 
 
     def load_model(self):
-        print("--- LOADING MODEL ---")
         self._agent_model = PPO2.load('ppo_curve')
 
 

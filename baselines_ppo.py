@@ -37,7 +37,7 @@ if __name__ == '__main__':
             if done:
                 obs = env.reset()
                 resets += 1
-            if resets >= 1:
+            if resets >= 5:
                 print('--- Reloading models ---')
                 model = PPO2.load('ppo_curve')
                 env.load_model()
