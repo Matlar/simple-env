@@ -4,7 +4,7 @@ import time
 import gym
 import gym_curve
 import itertools
-from stable_baselines.common.policies import CnnPolicy
+from policy import SmallCnnPolicy
 from stable_baselines.common.vec_env import SubprocVecEnv
 from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines.bench import Monitor
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     else:
         env = SubprocVecEnv([make_env for _ in range(4)])
         if sys.argv[1] == 'new':
-            model = PPO2(CnnPolicy, env, verbose=1)
+            model = PPO2(SmallCnnPolicy, env, verbose=1)
             model.save('ppo_curve')
         else:
             model = PPO2.load('ppo_curve', env=env)

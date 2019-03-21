@@ -6,11 +6,13 @@ import itertools
 import numpy as np
 from enum import IntEnum
 from stable_baselines import PPO2
+from maps import get_map
 
-SHAPE = (36, 36)
+SHAPE = (15, 15)
 CHARACTERS = (' ', '#', 'S', 'A')
 SLEEP = 0.1
-AGENTS = 3
+AGENTS = 2
+OBSTACLES = int(SHAPE[0]*SHAPE[1]*0.1)
 WIN = 1000
 
 class Direction(IntEnum):
@@ -30,9 +32,12 @@ class CurveEnv(gym.Env):
                 shape=(SHAPE[0], SHAPE[1], 3), dtype=np.uint8)
 
         self._curr_episode = 0
-        self._move_count = [0, 0, 0, 0]
         self._training = training
         self._agent_model = None
+
+        # [up, right, down, left, failed_moves]
+        self._move_count = [0, 0, 0, 0, 0]
+        self._last_killing_move = (0, True)
 
 
     def step(self, action):
@@ -63,6 +68,10 @@ class CurveEnv(gym.Env):
         episode_over = (self._state['agents'][0] is None if self._training
                         else all([agent is None for agent in self._state['agents']]))
 
+        # Save last killing move
+        if self._state['agents'][0] is None and self._last_killing_move[1]:
+            self._last_killing_move = (action, False)
+
         # Update layers
         self._layers = self._get_states()
 
@@ -85,8 +94,13 @@ class CurveEnv(gym.Env):
         self._layers = self._get_states()
 
         # Load new model
-        if self._training and self._curr_episode % 1000 == 0:
+        if self._training and AGENTS > 1 and self._curr_episode % 1000 == 0:
             self.load_model()
+
+        # Reset last killing move
+        self._last_killing_move = (self._last_killing_move[0], True)
+
+        # Return initial observations
         return np.stack(self._layers[0], axis=2)
 
 
@@ -97,7 +111,9 @@ class CurveEnv(gym.Env):
         print(f'Up: {self._move_count[Direction.up]}',
               f'\tRight: {self._move_count[Direction.right]}',
               f'\tDown: {self._move_count[Direction.down]}',
-              f'\tLeft: {self._move_count[Direction.left]}')
+              f'\tLeft: {self._move_count[Direction.left]}',
+              f'\tFailed: {self._move_count[-1]}')
+        print(f'Last killing move: {Direction(self._last_killing_move[0]).name}')
 
         layers = [np.copy(layer) for layer in self._layers[0]]
         state = [factor*layer for factor, layer in zip([1, -1, 3], layers)]
@@ -116,23 +132,16 @@ class CurveEnv(gym.Env):
     def _set_state(self):
         state = dict()
 
-        # Build walls around the world
-        walls = np.zeros(SHAPE, dtype=np.uint8)
-        for i in range(SHAPE[0]):
-            walls[i, 0] = 1
-            walls[i, SHAPE[1]-1] = 1
-        for i in range(SHAPE[1]):
-            walls[0, i] = 1
-            walls[SHAPE[0]-1, i] = 1
-        state['walls'] = walls
+        # Get map
+        obstacles, state['walls'] = get_map('lshape_15x15')
 
         # Generate agents
         agents = set()
         while len(agents) < AGENTS:
-            position = (random.randint(2, SHAPE[0]-3),
-                        random.randint(2, SHAPE[1]-3))
-            direction = random.randint(0, 3)
-            agents.add((position, direction))
+            position = (random.randrange(SHAPE[0]),
+                        random.randrange(SHAPE[1]))
+            if position not in obstacles:
+                agents.add((position, None))
         agents = list(agents)
         random.shuffle(agents)
         state['agents'] = agents
@@ -147,8 +156,11 @@ class CurveEnv(gym.Env):
         (y, x), direction = self._state['agents'][agent]
 
         # Ignore action if trying to go opposite direction
-        if action == (direction - 2) % 4:
+        if direction is None:
+            direction = action
+        elif action == (direction - 2) % 4:
             action = direction
+            self._move_count[-1] += 1
 
         if action == Direction.up:
             new_position = (y-1, x)
