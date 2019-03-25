@@ -29,18 +29,23 @@ if __name__ == '__main__':
     ap.add_argument('-o', '--out', type=str, help='where to save the model')
     ap.add_argument('-t', '--timesteps', type=int, help='how many timesteps to take before saving', default=10000)
     ap.add_argument('-s', '--sleep', type=int, help='how many ms to sleep between renders', default=50)
+    ap.add_argument('-r', '--reload', type=int, help='how often to reload models when showing', default=5)
+    ap.add_argument('-p', '--play', type=int, help='1 if IRL player', default=0)
     args = ap.parse_args()
     args.out = args.out or args.model
 
     if args.action == 'show':
-        register(id='Curve-notrain-v0',
+        register(id='Curve-alt-v0',
                 entry_point='gym_curve.envs:CurveEnv',
-                kwargs={'training': False})
-        env = gym.make('Curve-notrain-v0')
+                kwargs={'training': False, 'play': bool(args.play)})
+        env = gym.make('Curve-alt-v0')
         model = PPO2.load(args.model)
 
         obs = env.reset()
         resets = 0
+        if args.play:
+            env.render()
+            time.sleep(1)
         while True:
             env.render()
             time.sleep(args.sleep/1000)
@@ -49,7 +54,10 @@ if __name__ == '__main__':
             if done:
                 obs = env.reset()
                 resets += 1
-            if resets >= 5:
+                if args.play:
+                    env.render()
+                    time.sleep(1)
+            if resets >= args.reload:
                 print('--- Reloading models ---')
                 model = PPO2.load(args.model)
                 env.load_model()

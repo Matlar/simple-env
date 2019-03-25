@@ -2,26 +2,36 @@ import numpy as np
 from itertools import product
 
 maps = {}
-def get_map(name, shape=None):
-    obstacles = []
+def get_map(name, shape):
     if name == 'empty':
-        # Generate the empty map
-        walls = np.zeros(shape)
-        for r in range(shape[0]):
-            walls[r, 0] = walls[r, -1] = 1
-            obstacles.append((r, 0))
-            obstacles.append((r, shape[1]-1))
-        for c in range(shape[1]):
-            walls[0, c] = walls[-1, c] = 1
-            obstacles.append((0, c))
-            obstacles.append((shape[0]-1, c))
+        obstacles, walls = get_empty(shape)
+    elif name == 'random':
+        obstacles, walls = get_empty(shape)
+        for r, c  in product(*map(range, walls.shape)):
+            if np.random.uniform() < 0.08:
+                walls[r, c] = 1
+                obstacles.append((r, c))
     else:
         # Get the pre-defined map
+        obstacles = []
         walls = np.copy(maps[name])
         for r, c  in product(*map(range, walls.shape)):
             if walls[r, c] == 1:
                 obstacles.append((r, c))
-    return (set(obstacles), walls)
+    return set(obstacles), walls
+
+def get_empty(shape):
+    obstacles = []
+    walls = np.zeros(shape)
+    for r in range(shape[0]):
+        walls[r, 0] = walls[r, -1] = 1
+        obstacles.append((r, 0))
+        obstacles.append((r, shape[1]-1))
+    for c in range(shape[1]):
+        walls[0, c] = walls[-1, c] = 1
+        obstacles.append((0, c))
+        obstacles.append((shape[0]-1, c))
+    return obstacles, walls
 
 maps['maze_15x15'] = np.array([
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],

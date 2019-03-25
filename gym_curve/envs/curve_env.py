@@ -5,16 +5,19 @@ import random
 import itertools
 import numpy as np
 from enum import IntEnum
+from collections import deque
 from stable_baselines import PPO2
 from maps import get_map
+from keyhandler import KeyHandler
 
 CHARACTERS = (' ', '#', 'S', 'A')
 
 # Configure environment
-SHAPE = (24, 24)
-SLEEP = 0.1
-AGENTS = 1
+SHAPE = (16, 16)
 STICKY = 0.1
+AVG_LATEST = 5
+AGENTS = 1
+MAP = 'empty'
 
 class Direction(IntEnum):
     up    = 0
@@ -26,19 +29,25 @@ class CurveEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
 
-    def __init__(self, training=True):
+    def __init__(self, training=True, play=False):
         super(CurveEnv, self).__init__()
         self.action_space = gym.spaces.Discrete(4)
         self.observation_space = gym.spaces.Box(low=0, high=1,
                 shape=(SHAPE[0], SHAPE[1], 3), dtype=np.uint8)
 
         self._curr_episode = 0
+        self._episode_reward = 0
+        self._episode_rewards = deque([0]*AVG_LATEST, AVG_LATEST)
         self._training = training
+        self._play = play
         self._agent_model = None
 
         # [up, right, down, left, failed_moves]
         self._move_count = [0, 0, 0, 0, 0]
         self._last_killing_move = (0, True)
+
+        if self._play:
+            self._key_handler = KeyHandler()
 
 
     def step(self, action):
@@ -48,10 +57,14 @@ class CurveEnv(gym.Env):
         self._move(action)
         self._move_count[action] += 1
 
-        # Move other agents
-        if AGENTS > 1 and self._agent_model is None:
+        if self._play and AGENTS > 1:
+            player_action = self._key_handler.get_action()
+            self._move(player_action, agent=1)
+
+        # Move AI agents
+        if AGENTS > 1+self._play and self._agent_model is None:
             self.load_model()
-        for i, agent in enumerate(self._state['agents'][1:], start=1):
+        for i, agent in enumerate(self._state['agents'][1+self._play:], start=1+self._play):
             if agent is not None:
                 agent_action, _ = self._agent_model.predict(np.stack(self._layers[i], axis=2))
                 self._move(agent_action, agent=i)
@@ -78,6 +91,7 @@ class CurveEnv(gym.Env):
 
         # Calculate reward for this step
         reward = self._get_reward()
+        self._episode_reward += reward
 
         return np.stack(self._layers[0], axis=2), reward, episode_over, {}
 
@@ -87,6 +101,8 @@ class CurveEnv(gym.Env):
         self._curr_episode += 1
         self._curr_step = 0
         self._state = self._set_state()
+        self._episode_rewards.append(self._episode_reward)
+        self._episode_reward = 0
 
         # Reset layers
         self._layers = [(self._state['walls'],
@@ -95,7 +111,7 @@ class CurveEnv(gym.Env):
         self._layers = self._get_states()
 
         # Load new model
-        if self._training and AGENTS > 1 and self._curr_episode % 1000 == 0:
+        if self._training and AGENTS > 2 and self._curr_episode % 1000 == 0:
             self.load_model()
 
         # Reset last killing move
@@ -107,14 +123,17 @@ class CurveEnv(gym.Env):
 
     def render(self, mode='human', close=False):
         os.system('clear')
-        print("Episode:", self._curr_episode)
-        print("Step:", self._curr_step)
+        print(f'Episode: {self._curr_episode}')
+        print(f'Step: {self._curr_step}')
+        print(f'Accumulated reward: {self._episode_reward}')
         print(f'Up: {self._move_count[Direction.up]}',
               f'\tRight: {self._move_count[Direction.right]}',
               f'\tDown: {self._move_count[Direction.down]}',
               f'\tLeft: {self._move_count[Direction.left]}',
               f'\tFailed: {self._move_count[-1]}')
         print(f'Last killing move: {Direction(self._last_killing_move[0]).name}')
+        average = 0 if self._curr_episode < 2 else sum(self._episode_rewards) // min(AVG_LATEST, self._curr_episode-1)
+        print(f'Last {AVG_LATEST} rewards: {list(self._episode_rewards)}, average: {average}, filled: {int(average*100/((SHAPE[0]-1)*(SHAPE[1]-1)))}%')
 
         layers = [np.copy(layer) for layer in self._layers[0]]
         state = [factor*layer for factor, layer in zip([1, -1, 3], layers)]
@@ -123,7 +142,6 @@ class CurveEnv(gym.Env):
             for c in range(SHAPE[1]):
                 print(CHARACTERS[state[r, c]], end=' ')
             print()
-        time.sleep(SLEEP)
 
 
     def load_model(self):
@@ -134,15 +152,16 @@ class CurveEnv(gym.Env):
         state = dict()
 
         # Get map
-        obstacles, state['walls'] = get_map('empty', SHAPE)
+        obstacles, state['walls'] = get_map(MAP, SHAPE)
 
         # Generate agents
         agents = set()
         while len(agents) < AGENTS:
-            position = (random.randrange(SHAPE[0]),
+            y, x = (random.randrange(SHAPE[0]),
                         random.randrange(SHAPE[1]))
-            if position not in obstacles:
-                agents.add((position, None))
+            if (y, x) not in obstacles and not all(
+                    [trap in obstacles for trap in ((y-1, x), (y+1, x), (y, x-1), (y, x+1))]):
+                agents.add(((y, x), None))
         agents = list(agents)
         random.shuffle(agents)
         state['agents'] = agents
@@ -156,13 +175,16 @@ class CurveEnv(gym.Env):
         # Unpack
         (y, x), direction = self._state['agents'][agent]
 
-        if direction is None:
+        if direction is None and action is None:
+            action = random.randint(0, 3)
             direction = action
-        elif action == (direction - 2) % 4:
-            # Ignore action if trying to go opposite direction
+        elif direction is None:
+            direction = action
+        elif action is None or action == (direction - 2) % 4:
+            # Ignore action if trying to go opposite direction (or no action)
             action = direction
             self._move_count[-1] += 1
-        elif np.random.uniform() < STICKY:
+        elif agent == 0 and np.random.uniform() < STICKY:
             # Sometimes, actions does not work (sticky actions)
             action = direction
 
