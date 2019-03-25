@@ -1,9 +1,9 @@
 import os
-import sys
 import time
 import gym
 import gym_curve
 import itertools
+import argparse
 from policy import SmallCnnPolicy
 from stable_baselines.common.vec_env import SubprocVecEnv
 from stable_baselines.common.vec_env import DummyVecEnv
@@ -16,22 +16,34 @@ def make_env():
     os.makedirs(log_dir, exist_ok=True)
     return Monitor(gym.make('Curve-v0'), log_dir, allow_early_resets=True)
 
-if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print('Usage: python baselines_ppo.py [new/continue/show]')
-        exit(1)
+def action_type(arg):
+    if arg not in ('new', 'continue', 'show'):
+        raise argparse.ArgumentTypeError("must be one of <new>, <continue>, <show>")
+    return arg
 
-    if sys.argv[1] == 'show':
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument('-a', '--action', required=True, type=action_type,
+                    help='the mode to use: create a <new> model, <continue> old model, <show> model')
+    ap.add_argument('-m', '--model', required=True, type=str, help='the model file')
+    ap.add_argument('-o', '--out', type=str, help='where to save the model')
+    ap.add_argument('-t', '--timesteps', type=int, help='how many timesteps to take before saving', default=10000)
+    ap.add_argument('-s', '--sleep', type=int, help='how many ms to sleep between renders', default=50)
+    args = ap.parse_args()
+    args.out = args.out or args.model
+
+    if args.action == 'show':
         register(id='Curve-notrain-v0',
                 entry_point='gym_curve.envs:CurveEnv',
                 kwargs={'training': False})
         env = gym.make('Curve-notrain-v0')
-        model = PPO2.load('ppo_curve')
+        model = PPO2.load(args.model)
 
         obs = env.reset()
         resets = 0
         while True:
             env.render()
+            time.sleep(args.sleep/1000)
             action, _ = model.predict(obs)
             obs, _, done, _ = env.step(action)
             if done:
@@ -39,21 +51,18 @@ if __name__ == '__main__':
                 resets += 1
             if resets >= 5:
                 print('--- Reloading models ---')
-                model = PPO2.load('ppo_curve')
+                model = PPO2.load(args.model)
                 env.load_model()
                 resets = 0
-    elif sys.argv[1] != 'new' and sys.argv[1] != 'continue':
-        print('Usage: python baselines_ppo.py [new/continue/show]')
-        exit(1)
     else:
         env = SubprocVecEnv([make_env for _ in range(4)])
-        if sys.argv[1] == 'new':
+        if args.action == 'new':
             model = PPO2(SmallCnnPolicy, env, verbose=1)
-            model.save('ppo_curve')
-        else:
-            model = PPO2.load('ppo_curve', env=env)
+            model.save(args.out)
+        elif args.action == 'continue':
+            model = PPO2.load(args.model, env=env)
 
         for i in itertools.count(start=1):
-            model.learn(total_timesteps=10000)
-            print(f'--- Saving after {i*10000} timesteps ---')
-            model.save('ppo_curve')
+            model.learn(total_timesteps=args.timesteps)
+            print(f'--- Saving after {i*args.timesteps} timesteps ---')
+            model.save(args.out)

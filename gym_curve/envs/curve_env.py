@@ -8,12 +8,13 @@ from enum import IntEnum
 from stable_baselines import PPO2
 from maps import get_map
 
-SHAPE = (15, 15)
 CHARACTERS = (' ', '#', 'S', 'A')
+
+# Configure environment
+SHAPE = (24, 24)
 SLEEP = 0.1
-AGENTS = 2
-OBSTACLES = int(SHAPE[0]*SHAPE[1]*0.1)
-WIN = 1000
+AGENTS = 1
+STICKY = 0.1
 
 class Direction(IntEnum):
     up    = 0
@@ -133,7 +134,7 @@ class CurveEnv(gym.Env):
         state = dict()
 
         # Get map
-        obstacles, state['walls'] = get_map('lshape_15x15')
+        obstacles, state['walls'] = get_map('empty', SHAPE)
 
         # Generate agents
         agents = set()
@@ -155,12 +156,15 @@ class CurveEnv(gym.Env):
         # Unpack
         (y, x), direction = self._state['agents'][agent]
 
-        # Ignore action if trying to go opposite direction
         if direction is None:
             direction = action
         elif action == (direction - 2) % 4:
+            # Ignore action if trying to go opposite direction
             action = direction
             self._move_count[-1] += 1
+        elif np.random.uniform() < STICKY:
+            # Sometimes, actions does not work (sticky actions)
+            action = direction
 
         if action == Direction.up:
             new_position = (y-1, x)
