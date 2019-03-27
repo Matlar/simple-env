@@ -1,7 +1,7 @@
 import os
 import time
 import gym
-import gym_snake
+import gym_curve
 import itertools
 import argparse
 from policy import SmallCnnPolicy
@@ -14,7 +14,7 @@ from gym.envs.registration import register
 def make_env():
     log_dir = f'/tmp/gym/{int(time.time())}'
     os.makedirs(log_dir, exist_ok=True)
-    return Monitor(gym.make('Snake-v0'), log_dir, allow_early_resets=True)
+    return Monitor(gym.make('Curve-v0'), log_dir, allow_early_resets=True)
 
 def action_type(arg):
     if arg not in ('new', 'continue', 'show'):
@@ -30,30 +30,37 @@ if __name__ == '__main__':
     ap.add_argument('-t', '--timesteps', type=int, help='how many timesteps to take before saving', default=10000)
     ap.add_argument('-s', '--sleep', type=int, help='how many ms to sleep between renders', default=50)
     ap.add_argument('-r', '--reload', type=int, help='how often to reload models when showing', default=5)
+    ap.add_argument('-p', '--play', type=int, help='1 if IRL player', default=0)
     args = ap.parse_args()
     args.out = args.out or args.model
 
     if args.action == 'show':
-        register(id='Snake-sticky-v0',
-                 entry_point='gym_snake.envs:SnakeEnv',
-                 kwargs={'sticky': False})
-        env = gym.make('Snake-sticky-v0')
+        register(id='Curve-alt-v0',
+                entry_point='gym_curve.envs:CurveEnv',
+                kwargs={'training': False, 'play': bool(args.play)})
+        env = gym.make('Curve-alt-v0')
         model = PPO2.load(args.model)
 
         obs = env.reset()
         resets = 0
+        if args.play:
+            env.render()
+            time.sleep(1)
         while True:
             env.render()
             time.sleep(args.sleep/1000)
             action, _ = model.predict(obs)
-            obs, reward, done, _ = env.step(action)
+            obs, _, done, _ = env.step(action)
             if done:
                 obs = env.reset()
                 resets += 1
-                time.sleep(1)
+                if args.play:
+                    env.render()
+                    time.sleep(1)
             if resets >= args.reload:
-                print(f'Reloading models after {resets} resets')
+                print('--- Reloading models ---')
                 model = PPO2.load(args.model)
+                env.load_model()
                 resets = 0
     else:
         env = SubprocVecEnv([make_env for _ in range(4)])

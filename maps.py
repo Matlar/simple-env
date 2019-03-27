@@ -1,3 +1,4 @@
+import random
 import numpy as np
 from itertools import product
 
@@ -7,10 +8,11 @@ def get_map(name, shape):
         obstacles, walls = get_empty(shape)
     elif name == 'random':
         obstacles, walls = get_empty(shape)
-        for r, c  in product(*map(range, walls.shape)):
-            if np.random.uniform() < 0.08:
-                walls[r, c] = 1
-                obstacles.append((r, c))
+        rand = random.sample(list(product(range(1, walls.shape[1]-1), range(1, walls.shape[0]-1))),
+                             int(0.08*(walls.shape[0]*walls.shape[1])))
+        for r, c in rand:
+            walls[r, c] = 1
+            obstacles.append((r, c))
     else:
         # Get the pre-defined map
         obstacles = []
