@@ -34,10 +34,10 @@ if __name__ == '__main__':
     args.out = args.out or args.model
 
     if args.action == 'show':
-        register(id='Snake-sticky-v0',
+        register(id='Snake-nosticky-v0',
                  entry_point='gym_snake.envs:SnakeEnv',
                  kwargs={'sticky': False})
-        env = gym.make('Snake-sticky-v0')
+        env = gym.make('Snake-nosticky-v0')
         model = PPO2.load(args.model)
 
         obs = env.reset()

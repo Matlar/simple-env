@@ -15,7 +15,7 @@ CHARACTERS = (' ', '#', 'S', 'X', '@', 'M')
 # Configure environment
 SHAPE = (12, 12)
 TAIL = 3
-MOVING = 3
+MOVING = 0
 FRUIT = 50
 STICKY = 0.1
 AVG_LATEST = 5
@@ -56,6 +56,10 @@ class SnakeEnv(gym.Env):
             self._move_object(i)
 
         # Move self and count the action
+        if action is None:
+            if self._state['direction'] is None:
+                self._state['direction'] = 0
+            action = self._state['direction']
         self._move(action)
         self._move_count[action] += 1
 
@@ -129,7 +133,7 @@ class SnakeEnv(gym.Env):
             for c in range(SHAPE[1]):
                 print(CHARACTERS[state[r, c]], end=' ')
             if True: # True if all layers should be rendered
-                print(end=' ')
+                print(end='          ')
                 for c in range(SHAPE[1]):
                     print(CHARACTERS[int(layers[0][r, c]*1)], end=' ')
                 print(end=' ')
