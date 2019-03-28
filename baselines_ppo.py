@@ -12,7 +12,7 @@ from stable_baselines import PPO2
 from gym.envs.registration import register
 
 def make_env():
-    log_dir = f'/tmp/gym/{int(time.time())}'
+    log_dir = f'monitor/{int(time.time())}'
     os.makedirs(log_dir, exist_ok=True)
     return Monitor(gym.make('Snake-v0'), log_dir, allow_early_resets=True)
 
@@ -28,6 +28,7 @@ if __name__ == '__main__':
     ap.add_argument('-m', '--model', required=True, type=str, help='the model file')
     ap.add_argument('-o', '--out', type=str, help='where to save the model')
     ap.add_argument('-t', '--timesteps', type=int, help='how many timesteps to take before saving', default=10000)
+    ap.add_argument('-i', '--iterations', type=int, help='how many iterations to run of training', default=0)
     ap.add_argument('-s', '--sleep', type=int, help='how many ms to sleep between renders', default=50)
     ap.add_argument('-r', '--reload', type=int, help='how often to reload models when showing', default=5)
     args = ap.parse_args()
@@ -67,3 +68,5 @@ if __name__ == '__main__':
             model.learn(total_timesteps=args.timesteps)
             print(f'--- Saving after {i*args.timesteps} timesteps ---')
             model.save(args.out)
+            if args.iterations > 0 and args.iterations == i:
+                break

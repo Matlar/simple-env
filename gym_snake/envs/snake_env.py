@@ -16,7 +16,6 @@ CHARACTERS = (' ', '#', 'S', 'X', '@', 'M')
 SHAPE = (12, 12)
 TAIL = 3
 MOVING = 0
-FRUIT = 50
 STICKY = 0.1
 AVG_LATEST = 5
 MAP = 'empty'
