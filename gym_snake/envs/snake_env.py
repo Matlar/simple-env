@@ -14,7 +14,7 @@ CHARACTERS = (' ', '#', 'S', 'X', '@', 'M')
 
 # Configure environment
 SHAPE = (12, 12)
-TAIL = 3
+TAIL = None
 MOVING = 0
 STICKY = 0.1
 AVG_LATEST = 5
@@ -30,7 +30,7 @@ class SnakeEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
 
-    def __init__(self, sticky=True):
+    def __init__(self, sticky=True, obstacle_rate=None):
         super(SnakeEnv, self).__init__()
         self.action_space = gym.spaces.Discrete(4)
         self.observation_space = gym.spaces.Box(low=0, high=1,
@@ -45,6 +45,7 @@ class SnakeEnv(gym.Env):
         self._deaths_by_tail = 0
         self._deaths_by_moving = 0
         self._sticky = sticky
+        self._obstacle_rate = obstacle_rate
 
 
     def step(self, action):
@@ -82,6 +83,13 @@ class SnakeEnv(gym.Env):
 
 
     def reset(self):
+        # Randomize tail length
+        global TAIL
+        if self._sticky:
+            TAIL = random.randint(0, 10)
+        else:
+            TAIL = 3
+
         # Set up new episode
         self._curr_episode += 1
         self._curr_step = 0
@@ -155,7 +163,7 @@ class SnakeEnv(gym.Env):
         state['direction'] = None
 
         # Get map
-        obstacles, state['walls'] = get_map(MAP, SHAPE)
+        obstacles, state['walls'] = get_map(MAP, SHAPE, self._obstacle_rate)
 
         # Generate self and fruit
         objects = set()

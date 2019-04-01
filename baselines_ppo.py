@@ -31,6 +31,7 @@ if __name__ == '__main__':
     ap.add_argument('-i', '--iterations', type=int, help='how many iterations to run of training', default=0)
     ap.add_argument('-s', '--sleep', type=int, help='how many ms to sleep between renders', default=50)
     ap.add_argument('-r', '--reload', type=int, help='how often to reload models when showing', default=5)
+    ap.add_argument('-e', '--envs', type=int, help='how many environments to run in parallel', default=4)
     args = ap.parse_args()
     args.out = args.out or args.model
 
@@ -57,7 +58,7 @@ if __name__ == '__main__':
                 model = PPO2.load(args.model)
                 resets = 0
     else:
-        env = SubprocVecEnv([make_env for _ in range(4)])
+        env = SubprocVecEnv([make_env for _ in range(args.envs)], start_method='forkserver')
         if args.action == 'new':
             model = PPO2(SmallCnnPolicy, env, verbose=1)
             model.save(args.out)

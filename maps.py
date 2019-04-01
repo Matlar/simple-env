@@ -3,13 +3,14 @@ import numpy as np
 from itertools import product
 
 maps = {}
-def get_map(name, shape):
+def get_map(name, shape, obstacle_rate):
+    if obstacle_rate is None: obstacle_rate = 0.08
     if name == 'empty':
         obstacles, walls = get_empty(shape)
     elif name == 'random':
         obstacles, walls = get_empty(shape)
         rand = random.sample(list(product(range(1, walls.shape[1]-1), range(1, walls.shape[0]-1))),
-                             int(0.08*(walls.shape[0]*walls.shape[1])))
+                             int(obstacle_rate*(walls.shape[0]*walls.shape[1])))
         for r, c in rand:
             walls[r, c] = 1
             obstacles.append((r, c))
