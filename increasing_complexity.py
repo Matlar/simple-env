@@ -30,23 +30,24 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('-m', '--model', required=True, type=str, help='where to save the model')
     ap.add_argument('-t', '--timesteps', type=int, help='how many timesteps to take before saving', default=100000)
-    ap.add_argument('-c', '--complexity', type=int, help='how many complexity increments to do', default=9)
     ap.add_argument('-e', '--envs', type=int, help='how many environments to run in parallel', default=4)
+    ap.add_argument('-s', '--start', type=float, help='starting complexity', default=0.0)
+    ap.add_argument('-l', '--limit', type=float, help='complexity limit', default=0.1)
+    ap.add_argument('-i', '--increase', type=float, help='complexity increase', default=0.01)
     args = ap.parse_args()
 
-    env = SubprocVecEnv([make_env for _ in range(args.envs)],
-                        start_method='forkserver')
-    model = PPO2(SmallCnnPolicy, env, verbose=1)
-    print('--- Begin training with complexity 0 ---')
-    model.learn(total_timesteps=args.timesteps)
-    print(f'--- Saving after {args.timesteps} timesteps ---')
-    model.save(args.model)
-
-    for c in range(1, args.complexity+1):
-        env = SubprocVecEnv([partial(make_env, obstacle_rate=0.01*c) for _ in range(args.envs)],
+    complexity = args.start
+    timesteps = 0
+    while complexity + args.increase/10 < args.limit:
+        env = SubprocVecEnv([partial(make_env, obstacle_rate=complexity) for _ in range(args.envs)],
                             start_method='forkserver')
-        model = PPO2.load(args.model, env=env)
-        print(f'--- Begin training with complexity {0.01*c} ---')
+        if timesteps == 0:
+            model = PPO2(SmallCnnPolicy, env, verbose=1)
+        else:
+            model = PPO2.load(args.model, env=env)
+        print(f'--- Begin training with complexity {complexity:.2} ---')
         model.learn(total_timesteps=args.timesteps)
-        print(f'--- Saving after {c*args.timesteps} timesteps ---')
+        timesteps += args.timesteps
+        print(f'--- Saving after {timesteps} timesteps ---')
         model.save(args.model)
+        complexity += args.increase

@@ -18,7 +18,7 @@ TAIL = None
 MOVING = 0
 STICKY = 0.1
 AVG_LATEST = 5
-MAP = 'empty'
+MAP = 'random'
 
 class Direction(IntEnum):
     up    = 0
