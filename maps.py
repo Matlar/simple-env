@@ -4,7 +4,6 @@ from itertools import product
 
 maps = {}
 def get_map(name, shape, obstacle_rate):
-    if obstacle_rate is None: obstacle_rate = 0.08
     if name == 'empty':
         obstacles, walls = get_empty(shape)
     elif name == 'random':
