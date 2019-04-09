@@ -4,6 +4,7 @@ import gym
 import gym_snake
 import itertools
 import argparse
+import random
 from functools import partial
 from policy import SmallCnnPolicy
 from stable_baselines.common.vec_env import SubprocVecEnv
@@ -12,10 +13,10 @@ from stable_baselines.bench import Monitor
 from stable_baselines import PPO2
 from gym.envs.registration import register
 
-def make_env(kwargs, obstacle_rate):
+def make_env(kwargs, obstacle_rate, name):
     kwargs = eval(kwargs)
     kwargs['obstacle_rate'] = obstacle_rate
-    log_dir = f'monitor/{int(time.time())}'
+    log_dir = f'monitor/{name}/{int(time.time())}_{random.randint(0, 1000000)}'
     os.makedirs(log_dir, exist_ok=True)
 
     if obstacle_rate is None:
@@ -37,12 +38,13 @@ if __name__ == '__main__':
     ap.add_argument('-l', '--limit', type=float, help='complexity limit', default=0.1)
     ap.add_argument('-i', '--increase', type=float, help='complexity increase', default=0.01)
     ap.add_argument('-k', '--kwargs', type=str, help='keyword arguments', default='{}')
+    ap.add_argument('-n', '--name', type=str, help='name of experiment', default=f'noname_{random.randint(0, 1000000)}')
     args = ap.parse_args()
 
     complexity = args.start
     timesteps = 0
     while complexity + args.increase/10 < args.limit:
-        env = SubprocVecEnv([partial(make_env, kwargs=args.kwargs, obstacle_rate=complexity) for _ in range(args.envs)],
+        env = SubprocVecEnv([partial(make_env, kwargs=args.kwargs, obstacle_rate=complexity, name=args.name) for _ in range(args.envs)],
                             start_method='forkserver')
         if timesteps == 0:
             model = PPO2(SmallCnnPolicy, env, verbose=1)
