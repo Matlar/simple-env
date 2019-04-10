@@ -48,6 +48,7 @@ if __name__ == '__main__':
                             start_method='forkserver')
         if timesteps == 0:
             model = PPO2(SmallCnnPolicy, env, verbose=1)
+            model.save(args.model)
         else:
             model = PPO2.load(args.model, env=env)
         print(f'--- Begin training with complexity {complexity:.2} ---')
