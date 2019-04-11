@@ -38,15 +38,17 @@ if __name__ == '__main__':
     ap.add_argument('-e', '--envs', type=int, help='how many environments to run in parallel', default=4)
     ap.add_argument('-k', '--kwargs', type=str, help='keyword arguments', default='{}')
     ap.add_argument('-n', '--name', type=str, help='name of experiment', default=f'noname_{random.randint(0, 1000000)}')
+    ap.add_argument('-r', '--resume', type=str, help='model to begin from', default='')
+    ap.add_argument('-i', '--initial', type=int, help='initial timesteps (for counting)', default=0)
     args = ap.parse_args()
 
-    timesteps = 0
-    last_model = None
+    timesteps = args.initial
+    last_model = args.resume
     model_name, model_ext = os.path.splitext(args.model)
     for complexity in eval(args.complexity):
         env = SubprocVecEnv([partial(make_env, kwargs=args.kwargs, obstacle_rate=complexity, name=args.name) for _ in range(args.envs)],
                             start_method='forkserver')
-        if last_model is None:
+        if last_model == '':
             model = PPO2(SmallCnnPolicy, env, verbose=1)
             model.save(model_name + f'_timestep_0' + model_ext)
         else:
