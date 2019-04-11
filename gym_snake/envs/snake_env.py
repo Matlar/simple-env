@@ -28,7 +28,7 @@ class SnakeEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
 
-    def __init__(self, sticky=True, obstacle_rate=0.08, tail=0, level='random'):
+    def __init__(self, sticky=True, obstacle_rate=0.09, tail=0, level='random'):
         super(SnakeEnv, self).__init__()
         self.action_space = gym.spaces.Discrete(4)
         self.observation_space = gym.spaces.Box(low=0, high=1,
@@ -111,7 +111,7 @@ class SnakeEnv(gym.Env):
         os.system('clear')
         print(f'Episode: {self._curr_episode}')
         print(f'Step: {self._curr_step}')
-        print(f'Eaten fruits: {max(0, len(self._state["tail"])-3)}')
+        print(f'Eaten fruits: {len(self._state["tail"])}')
         print(f'Accumulated reward: {self._episode_reward:.1f}')
         average = 0 if self._curr_episode < 2 else sum(self._episode_rewards) // min(AVG_LATEST, self._curr_episode-1)
         print(f'Last {AVG_LATEST} rewards: {", ".join([f"{reward:.1f}" for reward in self._episode_rewards if reward != 0])}')

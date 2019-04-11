@@ -4,15 +4,20 @@ from itertools import product
 
 maps = {}
 def get_map(name, shape, obstacle_rate):
-    if name == 'empty':
+    if name == 'empty' or obstacle_rate == 0.0:
         obstacles, walls = get_empty(shape)
     elif name == 'random':
         obstacles, walls = get_empty(shape)
-        rand = random.sample(list(product(range(1, walls.shape[1]-1), range(1, walls.shape[0]-1))),
-                             int(obstacle_rate*(walls.shape[0]*walls.shape[1])))
-        for r, c in rand:
-            walls[r, c] = 1
-            obstacles.append((r, c))
+        positions = list(product(range(1, shape[0]-1), range(1, shape[1]-1)))
+        random.shuffle(positions)
+        target = int(obstacle_rate*shape[0]*shape[1]) + len(obstacles)
+        for r, c in positions:
+            if not any([position in obstacles for position in product((r-1, r, r+1), (c-1, c, c+1))]):
+                # There can't be any adjacent objects
+                walls[r, c] = 1
+                obstacles.append((r, c))
+                if len(obstacles) >= target:
+                    break
     else:
         # Get the pre-defined map
         obstacles = []
