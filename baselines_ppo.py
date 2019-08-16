@@ -38,7 +38,7 @@ if __name__ == '__main__':
     if args.action == 'show':
         register(id='Snake-nosticky-v0',
                  entry_point='gym_snake.envs:SnakeEnv',
-                 kwargs={'sticky': False})
+                 kwargs={'sticky': False, 'fixed_randomness': True, 'seed_increment': 0, 'obstacle_rate': 0.09, 'tail': 1})
         env = gym.make('Snake-nosticky-v0')
         model = PPO2.load(args.model)
 

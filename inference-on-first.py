@@ -6,7 +6,10 @@ import gym
 import gym_snake
 import numpy as np
 from stable_baselines import PPO2
+from policy import SmallCnnPolicy
 from gym.envs.registration import register
+from stable_baselines.common.vec_env import DummyVecEnv
+
 
 def inference(model, env):
     reward = 0
@@ -26,9 +29,9 @@ def inference(model, env):
             reward -= 10
     return reward, length
 
-def test_model(model_path, env_name, episodes):
+def test_model(env_name, episodes):
     env = gym.make(env_name)
-    model = PPO2.load(model_path)
+    model = PPO2(SmallCnnPolicy, DummyVecEnv([lambda: gym.make(env_name)]), verbose=1)
     rewards = []
     lengths = []
     for episode in range(1, episodes+1):
@@ -38,25 +41,10 @@ def test_model(model_path, env_name, episodes):
         lengths.append(length)
     return rewards, lengths
 
-def get_filenames(directory):
-    filenames = []
-    for path, _, files in os.walk(directory):
-        for name in files:
-            if name.endswith('.pkl'):
-                filename = os.path.join(path, name)
-                matches = re.findall('timestep_(.+)_complexity', filename)
-                assert(len(matches) == 1)
-                filenames.append((int(matches[0]), filename))
-    filenames.sort()
-    return filenames
-
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
-    ap.add_argument('-m', '--model', required=True, type=str, help='model name')
     ap.add_argument('-c', '--complexity', required=True, type=float, help='complexity')
     ap.add_argument('-e', '--episodes', type=int, help='how many episodes to run', default=100)
-    ap.add_argument('-r', '--resume', type=int, help='the last finished inference timestep', default=0)
-    ap.add_argument('-l', '--last', type=int, help='the last timestep to train on', default=-1)
     args = vars(ap.parse_args())
 
     registered_name = f'Snake-inference-v0'
@@ -70,15 +58,12 @@ if __name__ == '__main__':
                  'seed_increment': 1,
                  'map_count': 10})
 
-    data_dir = f'/home/oskar/kth/kex/simple-env/inference/complexity_{args["complexity"]:.2f}/{args["model"]}'
+    data_dir = f'/home/oskar/first-inf/complexity_{args["complexity"]}'
     os.makedirs(data_dir, exist_ok=True)
-    for timesteps, filename in get_filenames(f'/home/oskar/kth/kex/simple-env/experiments/10M/models/{args["model"]}'):
-        if timesteps <= args['resume']: continue
-        if args['last'] != -1 and timesteps > args['last']: break
-        print('Evaluating model:', filename)
-        rewards, lengths = test_model(filename, registered_name, args['episodes'])
-        save_path = f'{data_dir}/data_{timesteps}.pkl'
-        with open(save_path, 'wb') as file:
-            pickle.dump((rewards, lengths), file)
-            print('Saved to', save_path)
-        print()
+    print('Evaluating model')
+    rewards, lengths = test_model(registered_name, args['episodes'])
+    save_path = f'{data_dir}/data_0.pkl'
+    with open(save_path, 'wb') as file:
+        pickle.dump((rewards, lengths), file)
+        print('Saved to', save_path)
+    print()

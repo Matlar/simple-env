@@ -44,7 +44,7 @@ def get_filenames(directory):
         for name in files:
             if name.endswith('.pkl'):
                 filename = os.path.join(path, name)
-                matches = re.findall('timestep_(.+)_complexity', filename)
+                matches = re.findall('timestep_(.+).pkl', filename)
                 assert(len(matches) == 1)
                 filenames.append((int(matches[0]), filename))
     filenames.sort()
@@ -52,11 +52,9 @@ def get_filenames(directory):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
-    ap.add_argument('-m', '--model', required=True, type=str, help='model name')
+    ap.add_argument('-m', '--model', required=True, type=str, help='model type (random/determinstic)')
     ap.add_argument('-c', '--complexity', required=True, type=float, help='complexity')
     ap.add_argument('-e', '--episodes', type=int, help='how many episodes to run', default=100)
-    ap.add_argument('-r', '--resume', type=int, help='the last finished inference timestep', default=0)
-    ap.add_argument('-l', '--last', type=int, help='the last timestep to train on', default=-1)
     args = vars(ap.parse_args())
 
     registered_name = f'Snake-inference-v0'
@@ -67,14 +65,11 @@ if __name__ == '__main__':
                  'obstacle_rate': args['complexity'],
                  'tail': 1,
                  'fixed_randomness': True,
-                 'seed_increment': 1,
-                 'map_count': 10})
+                 'seed_increment': 0})
 
-    data_dir = f'/home/oskar/kth/kex/simple-env/inference/complexity_{args["complexity"]:.2f}/{args["model"]}'
+    data_dir = f'/home/oskar/exp16apr/data/{args["model"]}'
     os.makedirs(data_dir, exist_ok=True)
-    for timesteps, filename in get_filenames(f'/home/oskar/kth/kex/simple-env/experiments/10M/models/{args["model"]}'):
-        if timesteps <= args['resume']: continue
-        if args['last'] != -1 and timesteps > args['last']: break
+    for timesteps, filename in get_filenames(f'/home/oskar/exp16apr/models/{args["model"]}'):
         print('Evaluating model:', filename)
         rewards, lengths = test_model(filename, registered_name, args['episodes'])
         save_path = f'{data_dir}/data_{timesteps}.pkl'

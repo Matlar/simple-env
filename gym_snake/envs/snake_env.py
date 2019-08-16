@@ -28,7 +28,7 @@ class SnakeEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
 
-    def __init__(self, sticky=True, obstacle_rate=0.09, tail=0, level='random', fixed_randomness=False, seed_increment=1):
+    def __init__(self, sticky=True, obstacle_rate=0.09, tail=0, level='random', fixed_randomness=False, seed_increment=1, map_count=None):
         super(SnakeEnv, self).__init__()
         self.action_space = gym.spaces.Discrete(4)
         self.observation_space = gym.spaces.Box(low=0, high=1,
@@ -47,9 +47,10 @@ class SnakeEnv(gym.Env):
         self._tail = tail
         self._tail_random = tail == -1
         self._map = level
-        self._seed = 0
+        self._seed = -seed_increment
         self._fixed_randomness = fixed_randomness
         self._seed_increment = seed_increment
+        self._map_count = map_count
 
 
     def step(self, action):
@@ -94,6 +95,7 @@ class SnakeEnv(gym.Env):
         # Set random seed
         if self._fixed_randomness:
             self._seed += self._seed_increment
+            if self._map_count is not None: self._seed %= self._map_count
             random.seed(self._seed)
 
         # Set up new episode

@@ -1,16 +1,8 @@
 import os
 
-complexities = [0.0]
-experiment_name = '10M'
-experiment_type = 'empty'
-
-# complexities = [0.09]
-# experiment_name = '10M'
-# experiment_type = 'noincrease'
-
-# complexities = [0.01 * i for i in range(10)]
-# experiment_name = '10M'
-# experiment_type = 'increase'
+complexities = [0.09]
+experiment_name = 'transfer-5M-0.09'
+experiment_type = 'increase'
 
 save_interval = 50000
 intervals_per_complexity = 10000000 // save_interval // len(complexities)
